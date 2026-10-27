@@ -1,0 +1,184 @@
+import { readFileSync, writeFileSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import { prepareOfficialPack } from './official-pack';
+import { createStore } from './store';
+import { saveDraft, transitionPack, digest } from './rule-packs';
+import { packWorkbook } from './review-workbook';
+import type { RulePack, SourceSnapshot } from '../shared/model';
+import { validatePackSources } from './pack-validation';
+const [command, ...args] = process.argv.slice(2);
+const flag = (name: string) => {
+  const i = args.indexOf('--' + name);
+  return i < 0 ? '' : args[i + 1] || '';
+};
+const store = createStore(process.env.DATA_DIR || '.data', { reconcile: false });
+try {
+  if (command === 'prepare-uceed') {
+    if (!flag('file')) throw Error('A private dossier output path is required.');
+    const result = await prepareOfficialPack(
+      { registration: flag('registration'), faq: flag('faq'), brochure: flag('brochure') },
+      flag('actor'),
+      flag('version') || '2027.reference.3',
+    );
+    const file = flag('file');
+    const fd = openSync(file, 'wx', 0o600);
+    try {
+      writeFileSync(fd, JSON.stringify(result, null, 2));
+      store.db.transaction(() => {
+        for (const s of result.snapshots)
+          store.db
+            .prepare(
+              'INSERT INTO source_snapshots VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',
+            )
+            .run(s.id, JSON.stringify(s));
+        saveDraft(store, result.pack, flag('actor'));
+      })();
+    } catch (error) {
+      unlinkSync(file);
+      throw error;
+    } finally {
+      closeSync(fd);
+    }
+    console.log(
+      JSON.stringify({
+        id: result.pack.id,
+        version: result.pack.version,
+        scopeHash: result.scopeHash,
+        state: 'draft',
+      }),
+    );
+  } else if (command === 'capture') {
+    const url = new URL(flag('url'));
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname !== 'www.uceed.iitb.ac.in' ||
+      url.username ||
+      url.password ||
+      url.port
+    )
+      throw Error('Source capture currently permits only the official HTTPS UCEED host.');
+    if (!flag('id') || !flag('title')) throw Error('Source ID and title are required.');
+    const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw Error(`Source returned HTTP ${response.status}.`);
+    if (!response.body) throw Error('Source has no body.');
+    let content = '',
+      size = 0;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > 1024 * 1024) throw Error('Source exceeds the one MB capture limit.');
+        content += decoder.decode(value, { stream: true });
+      }
+      content += decoder.decode();
+    } finally {
+      await reader.cancel();
+    }
+    const plain = content
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const snapshot: SourceSnapshot = {
+      id: flag('id'),
+      title: flag('title'),
+      url: url.href,
+      retrievedAt: new Date().toISOString(),
+      content: plain,
+      sha256: digest(plain),
+      representation: 'normalized_html_text',
+    };
+    store.db
+      .prepare(
+        'INSERT INTO source_snapshots VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',
+      )
+      .run(snapshot.id, JSON.stringify(snapshot));
+    console.log(
+      JSON.stringify({
+        id: snapshot.id,
+        sha256: snapshot.sha256,
+        retrievedAt: snapshot.retrievedAt,
+      }),
+    );
+  } else if (command === 'import-source') {
+    const snapshot = JSON.parse(readFileSync(flag('file'), 'utf8')) as SourceSnapshot;
+    if (
+      !snapshot.id ||
+      !snapshot.title ||
+      !snapshot.content ||
+      digest(snapshot.content) !== snapshot.sha256 ||
+      new URL(snapshot.url).hostname !== 'www.uceed.iitb.ac.in' ||
+      !snapshot.url.startsWith('https://') ||
+      Number.isNaN(Date.parse(snapshot.retrievedAt))
+    )
+      throw Error('A verified official source snapshot with matching integrity is required.');
+    store.db
+      .prepare(
+        'INSERT INTO source_snapshots VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',
+      )
+      .run(snapshot.id, JSON.stringify(snapshot));
+    console.log(
+      JSON.stringify({
+        id: snapshot.id,
+        sha256: snapshot.sha256,
+        representation: snapshot.representation,
+      }),
+    );
+  } else if (command === 'validate') {
+    const dossier = JSON.parse(readFileSync(flag('dossier'), 'utf8'));
+    const result = validatePackSources(dossier.pack, dossier.snapshots);
+    if (result.scopeHash !== dossier.scopeHash) throw Error('The dossier scope hash is stale.');
+    console.log(
+      JSON.stringify({
+        ...result,
+        status: 'structurally_valid',
+        independentApproval:
+          dossier.pack.lifecycle === 'published' ? 'check_registered_revision' : 'pending',
+      }),
+    );
+  } else if (command === 'review-sheet') {
+    // An offline HTML workbook for the independent reviewer; it produces the signed review file.
+    if (!flag('dossier') || !flag('out'))
+      throw Error('Use review-sheet --dossier <file> --out <file.html>.');
+    writeFileSync(flag('out'), packWorkbook(JSON.parse(readFileSync(flag('dossier'), 'utf8'))), {
+      mode: 0o600,
+      flag: 'wx',
+    });
+    console.log(JSON.stringify({ workbook: flag('out') }));
+  } else if (command === 'draft') {
+    const pack = JSON.parse(readFileSync(flag('file'), 'utf8')) as RulePack;
+    console.log(JSON.stringify(saveDraft(store, pack, flag('actor'))));
+  } else if (command === 'review' || command === 'publish' || command === 'retire') {
+    console.log(
+      JSON.stringify(
+        transitionPack(
+          store,
+          flag('id'),
+          flag('version'),
+          command,
+          flag('actor'),
+          flag('file') ? JSON.parse(readFileSync(flag('file'), 'utf8')) : undefined,
+        ),
+      ),
+    );
+  } else if (command === 'inspect') {
+    console.log(
+      JSON.stringify(
+        {
+          sources: store.db.prepare('SELECT payload FROM source_snapshots').all(),
+          packs: store.db.prepare('SELECT payload FROM pack_revisions').all(),
+        },
+        null,
+        2,
+      ),
+    );
+  } else
+    throw Error(
+      'Use capture --id --url --title; prepare-uceed; validate --dossier; review-sheet --dossier --out; draft --file --actor; review/publish/retire --id --version --actor; or inspect.',
+    );
+} finally {
+  store.db.close();
+}

@@ -1,0 +1,634 @@
+import { useState } from 'react';
+import {
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  GraduationCap,
+  BriefcaseBusiness,
+  Award,
+  SlidersHorizontal,
+  Plus,
+  Trash2,
+  ListChecks,
+  Link2,
+  FileText,
+} from 'lucide-react';
+import { Dialog } from './Dialog';
+import { importInstructionLines, templateRequirement } from '../../shared/templates';
+import type { Requirement } from '../../shared/model';
+import { useCatalog } from '../catalog';
+export interface CreateApplicationInput {
+  title: string;
+  templateId?: 'college' | 'scholarship' | 'job' | 'custom';
+  packId?: string;
+  requirements?: Requirement[];
+  destination: string;
+  deadline: string;
+  sourceUrl: string;
+  instructionText: string;
+}
+const icons = {
+  college: GraduationCap,
+  job: BriefcaseBusiness,
+  scholarship: Award,
+  custom: SlidersHorizontal,
+};
+export function ApplicationWizard({
+  initialTemplate = 'custom',
+  initialTitle = '',
+  onClose,
+  onCreate,
+}: {
+  initialTemplate?: string;
+  initialTitle?: string;
+  onClose: () => void;
+  onCreate: (input: CreateApplicationInput) => Promise<void>;
+}) {
+  const { templates, packs, limits } = useCatalog();
+  const starterRequirements = (id: string) =>
+    templates.find((t) => t.id === id)?.starter.map((r) => ({ ...r })) || [];
+  const [selected, setSelected] = useState(initialTemplate),
+    [step, setStep] = useState(0),
+    [title, setTitle] = useState(initialTitle),
+    [destination, setDestination] = useState(''),
+    [deadline, setDeadline] = useState(''),
+    [sourceUrl, setSourceUrl] = useState(''),
+    [instructions, setInstructions] = useState(''),
+    [rows, setRows] = useState<Requirement[]>(starterRequirements(initialTemplate)),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const referencePack = packs.find((p) => p.id === selected);
+  const reference = !!referencePack;
+  function choose(id: string) {
+    setSelected(id);
+    setRows(starterRequirements(id));
+    setError('');
+  }
+  async function save() {
+    setBusy(true);
+    setError('');
+    try {
+      await onCreate({
+        title,
+        destination,
+        deadline,
+        sourceUrl,
+        instructionText: instructions,
+        ...(reference
+          ? { packId: referencePack.id }
+          : { templateId: selected as CreateApplicationInput['templateId'], requirements: rows }),
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog
+      wide
+      title="Add application instructions"
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div className="wizard-body">
+        <ol className="wizard-steps">
+          {['Choose a starting point', 'Application details', 'Confirm requirements'].map(
+            (label, i) => (
+              <li key={label} className={step === i ? 'current' : step > i ? 'complete' : ''}>
+                <span aria-hidden="true">{step > i ? <Check size={13} /> : i + 1}</span>
+                {label}
+              </li>
+            ),
+          )}
+        </ol>
+        {step === 0 && (
+          <>
+            <div className="wizard-intro">
+              <h3>What are you applying for?</h3>
+              <p>Choose a starting point. Every item in a starter checklist can be edited.</p>
+            </div>
+            <div className="template-grid">
+              {templates.map((t) => {
+                const Icon = icons[t.kind];
+                return (
+                  <button
+                    type="button"
+                    className={`template-card ${selected === t.id ? 'selected' : ''}`}
+                    aria-pressed={selected === t.id}
+                    key={t.id}
+                    onClick={() => choose(t.id)}
+                  >
+                    <span className="template-icon" aria-hidden="true">
+                      <Icon size={22} />
+                    </span>
+                    <strong>{t.title}</strong>
+                    <p>{t.description}</p>
+                    <span className="template-foot">
+                      {t.starter.length
+                        ? t.starter.length + ' starter items'
+                        : 'Your instructions, your checklist'}
+                      {selected === t.id && <Check size={16} aria-hidden="true" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {packs.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={`reference-choice ${selected === p.id ? 'selected' : ''}`}
+                aria-pressed={selected === p.id}
+                onClick={() => choose(p.id)}
+              >
+                <span className="reference-badge">Reference</span>
+                <span>
+                  <strong>{p.title}</strong>
+                  <small>
+                    A versioned checklist with {p.requirementCount} items; {p.conditionalCount}{' '}
+                    depend on your answers
+                  </small>
+                </span>
+                {selected === p.id && <Check size={18} aria-hidden="true" />}
+              </button>
+            ))}
+            <p className="microcopy">
+              Starters help you organise. Confirm what is actually required with your institution or
+              employer.
+            </p>
+          </>
+        )}
+        {step === 1 && (
+          <form
+            id="application-details"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setStep(2);
+            }}
+          >
+            <div className="wizard-intro">
+              <h3>Name this application.</h3>
+              <p>Only the name is required. You can change any of this later.</p>
+            </div>
+            <label>
+              Application name
+              <input
+                aria-label="Application name"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                minLength={2}
+                maxLength={100}
+                placeholder={
+                  selected === 'job'
+                    ? 'e.g. Product designer at Acme'
+                    : 'e.g. My university application'
+                }
+              />
+            </label>
+            <div className="form-columns">
+              <label>
+                Institution or company
+                <input
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  maxLength={160}
+                  placeholder="Where are you applying?"
+                />
+              </label>
+              <label>
+                Application deadline
+                <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+              </label>
+            </div>
+            {!reference && (
+              <>
+                <label>
+                  Instructions source URL <span className="optional-label">optional</span>
+                  <span className="input-icon">
+                    <Link2 size={16} aria-hidden="true" />
+                    <input
+                      type="url"
+                      value={sourceUrl}
+                      onChange={(e) => setSourceUrl(e.target.value)}
+                      placeholder="https://…"
+                      maxLength={2000}
+                    />
+                  </span>
+                </label>
+                <label>
+                  Paste your document instructions <span className="optional-label">optional</span>
+                  <textarea
+                    rows={4}
+                    maxLength={limits.instructionChars}
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    placeholder={
+                      'One requirement per line, for example:\nResume as PDF\nDegree certificate\nRecommendation letter'
+                    }
+                  />
+                </label>
+                <p className="field-help">
+                  Each line becomes an editable item. Check conditions and formats yourself before
+                  you rely on the checklist.
+                </p>
+                {instructions.trim() && (
+                  <button
+                    type="button"
+                    className="outline"
+                    onClick={() => {
+                      setRows(importInstructionLines(instructions));
+                      setStep(2);
+                    }}
+                  >
+                    <ListChecks size={16} aria-hidden="true" />
+                    Use these lines as requirements
+                  </button>
+                )}
+              </>
+            )}
+          </form>
+        )}
+        {step === 2 && (
+          <>
+            <div className="wizard-intro">
+              <h3>
+                {reference
+                  ? 'Review your checklist.'
+                  : 'Make the checklist match your instructions.'}
+              </h3>
+              <p>
+                {reference
+                  ? `${referencePack.title} includes conditional evidence. You’ll confirm your answers after creating the application.`
+                  : 'Change formats, mark optional items, and remove anything that doesn’t apply.'}
+              </p>
+            </div>
+            {reference ? (
+              <div className="reference-preview">
+                <strong>{referencePack.requirementCount} versioned requirements</strong>
+                <p>
+                  {referencePack.groups.join(', ')}. This is a limited reference; compare it to the
+                  official instructions.
+                </p>
+                <a
+                  className="source-link"
+                  href={referencePack.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Read the source instructions <ArrowRight size={15} aria-hidden="true" />
+                </a>
+              </div>
+            ) : (
+              <>
+                <RequirementRows rows={rows} onChange={setRows} />
+                <button
+                  type="button"
+                  className="outline"
+                  onClick={() =>
+                    setRows([
+                      ...rows,
+                      {
+                        ...templateRequirement('New requirement', rows.length),
+                        id: 'r-' + crypto.randomUUID(),
+                      },
+                    ])
+                  }
+                  disabled={rows.length >= limits.requirements}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  Add requirement
+                </button>
+                {!rows.length && (
+                  <p className="field-help">Add at least one requirement to get started.</p>
+                )}
+              </>
+            )}
+          </>
+        )}
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="wizard-footer">
+          <span>
+            <FileText size={15} aria-hidden="true" />
+            {reference
+              ? `${referencePack.title} reference checklist`
+              : `${rows.length} item${rows.length === 1 ? '' : 's'} in your checklist`}
+          </span>
+          <div>
+            {step > 0 && (
+              <button
+                className="outline"
+                type="button"
+                disabled={busy}
+                onClick={() => setStep(step - 1)}
+              >
+                <ArrowLeft size={15} aria-hidden="true" />
+                Back
+              </button>
+            )}
+            {step === 0 ? (
+              <button
+                className="primary"
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setStep(1);
+                }}
+              >
+                Continue
+              </button>
+            ) : step === 1 ? (
+              <button className="primary" type="submit" form="application-details">
+                Review checklist
+              </button>
+            ) : (
+              <button
+                className="primary"
+                disabled={busy || (!reference && !rows.length) || title.trim().length < 2}
+                onClick={() => void save()}
+              >
+                {busy ? 'Creating…' : 'Create application'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+export function RequirementRows({
+  rows,
+  onChange,
+}: {
+  rows: Requirement[];
+  onChange: (rows: Requirement[]) => void;
+}) {
+  const { conditions, limits } = useCatalog();
+  function change(index: number, patch: Partial<Requirement>) {
+    onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+  return (
+    <div className="editable-requirements">
+      {rows.map((r, i) => (
+        <div className="requirement-edit-container" key={r.id}>
+          <div className="editable-requirement">
+            <span className="row-number">{i + 1}</span>
+            <label className="requirement-name">
+              Requirement name
+              <input
+                aria-label={`Requirement ${i + 1} name`}
+                value={r.title}
+                minLength={2}
+                maxLength={160}
+                onChange={(e) =>
+                  change(i, {
+                    title: e.target.value,
+                    ...(r.description.startsWith('Provide evidence for:')
+                      ? {
+                          description: `Provide evidence for: ${e.target.value}. Confirm the exact requirement against the instructions you received.`,
+                        }
+                      : {}),
+                  })
+                }
+                required
+              />
+            </label>
+            <label>
+              Format
+              <select
+                aria-label={`Requirement ${i + 1} format`}
+                value={r.mime}
+                onChange={(e) =>
+                  change(i, {
+                    mime: e.target.value as Requirement['mime'],
+                    extension:
+                      e.target.value === 'application/pdf'
+                        ? '.pdf'
+                        : e.target.value === 'image/jpeg'
+                          ? '.jpg'
+                          : 'any',
+                  })
+                }
+              >
+                <option value="any">PDF or JPEG</option>
+                <option value="application/pdf">PDF</option>
+                <option value="image/jpeg">JPG</option>
+              </select>
+            </label>
+            <label className="optional-check">
+              <input
+                type="checkbox"
+                checked={!!r.optional}
+                onChange={(e) => change(i, { optional: e.target.checked })}
+              />
+              Optional
+            </label>
+            <button
+              className="icon-button"
+              aria-label={`Remove requirement ${i + 1}`}
+              onClick={() => onChange(rows.filter((_, n) => n !== i))}
+              type="button"
+            >
+              <Trash2 size={17} aria-hidden="true" />
+            </button>
+          </div>
+          <details className="requirement-advanced">
+            <summary>Conditions, size limit & instructions</summary>
+            <div className="form-columns">
+              <label>
+                When does this apply?
+                <select
+                  aria-label={`Requirement ${i + 1} condition`}
+                  value={
+                    r.condition.op === 'eq' ? `${r.condition.field}:${r.condition.value}` : 'always'
+                  }
+                  onChange={(e) => {
+                    const [field, value] = e.target.value.split(':');
+                    change(i, {
+                      condition:
+                        field === 'always'
+                          ? { op: 'always' }
+                          : { op: 'eq', field: field as 'nameChanged', value },
+                    });
+                  }}
+                >
+                  {conditions.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Maximum file size (KB)
+                <input
+                  aria-label={`Requirement ${i + 1} size limit`}
+                  type="number"
+                  min={1}
+                  max={limits.fileBytes / 1024}
+                  step="any"
+                  placeholder="No checklist limit"
+                  value={r.maxBytes ? r.maxBytes / 1024 : ''}
+                  onChange={(e) =>
+                    change(i, {
+                      maxBytes: e.target.value
+                        ? Math.round(Number(e.target.value) * 1024)
+                        : undefined,
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <div className="form-columns">
+              {(
+                [
+                  ['minBytes', 'Minimum file size (bytes)', 0, limits.fileBytes],
+                  ['minPages', 'Minimum pages', 1, 20],
+                  ['maxPages', 'Maximum pages', 1, 20],
+                  ['minWidth', 'Minimum image width (px)', 1, 20000],
+                  ['maxWidth', 'Maximum image width (px)', 1, 20000],
+                  ['minHeight', 'Minimum image height (px)', 1, 20000],
+                  ['maxHeight', 'Maximum image height (px)', 1, 20000],
+                ] as const
+              ).map(([field, label, min, max]) => (
+                <label key={field}>
+                  {label}
+                  <input
+                    type="number"
+                    min={min}
+                    max={max}
+                    value={r[field] ?? ''}
+                    onChange={(e) =>
+                      change(i, { [field]: e.target.value ? Number(e.target.value) : undefined })
+                    }
+                  />
+                </label>
+              ))}
+              <label>
+                Evidence combination
+                <select
+                  value={r.evidenceMode || 'all'}
+                  onChange={(e) =>
+                    change(i, {
+                      evidenceMode: e.target.value as 'all' | 'any',
+                      evidenceSlots: e.target.value === 'any' ? [] : r.evidenceSlots,
+                    })
+                  }
+                >
+                  <option value="all">All linked components required</option>
+                  <option value="any">Any accepted alternative</option>
+                </select>
+              </label>
+            </div>
+            {r.evidenceMode !== 'any' && (
+              <label>
+                Required evidence components (comma separated)
+                <input
+                  maxLength={800}
+                  defaultValue={(r.evidenceSlots || []).join(', ')}
+                  onBlur={(e) =>
+                    change(i, {
+                      evidenceSlots: e.target.value
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                  placeholder="e.g. Form 1, Form 2"
+                />
+              </label>
+            )}
+            <fieldset>
+              <legend>Date rule from your instructions</legend>
+              <label>
+                Date field
+                <select
+                  value={r.dateCheck?.field || ''}
+                  onChange={(e) =>
+                    change(i, {
+                      dateCheck: e.target.value
+                        ? {
+                            field: e.target.value as 'birth_date' | 'issue_date' | 'expiry_date',
+                            operation: r.dateCheck?.operation || 'on_or_before',
+                            reference: r.dateCheck?.reference || '',
+                          }
+                        : undefined,
+                    })
+                  }
+                >
+                  <option value="">No date rule</option>
+                  <option value="birth_date">Date of birth</option>
+                  <option value="issue_date">Issue date</option>
+                  <option value="expiry_date">Expiry date</option>
+                </select>
+              </label>
+              {r.dateCheck && (
+                <div className="form-columns">
+                  <label>
+                    Comparison
+                    <select
+                      value={r.dateCheck.operation}
+                      onChange={(e) =>
+                        change(i, {
+                          dateCheck: {
+                            ...r.dateCheck!,
+                            operation: e.target.value as 'on_or_before' | 'on_or_after',
+                          },
+                        })
+                      }
+                    >
+                      <option value="on_or_before">On or before</option>
+                      <option value="on_or_after">On or after</option>
+                    </select>
+                  </label>
+                  <label>
+                    Reference date
+                    <input
+                      type="date"
+                      value={r.dateCheck.reference}
+                      onChange={(e) =>
+                        change(i, { dateCheck: { ...r.dateCheck!, reference: e.target.value } })
+                      }
+                      required
+                    />
+                  </label>
+                </div>
+              )}
+            </fieldset>
+            <label>
+              Phrase expected in the selected pages <span className="optional-label">optional</span>
+              <input
+                aria-label={`Requirement ${i + 1} expected text`}
+                maxLength={150}
+                value={r.expectedText || ''}
+                placeholder="e.g. Your full name or certificate title"
+                onChange={(e) => change(i, { expectedText: e.target.value })}
+              />
+            </label>
+            <label>
+              Instructions for this item
+              <textarea
+                aria-label={`Requirement ${i + 1} instructions`}
+                rows={3}
+                maxLength={1800}
+                value={r.description}
+                onChange={(e) => change(i, { description: e.target.value })}
+                required
+              />
+            </label>
+            <p className="field-help">
+              Only add conditions and limits that your actual instructions specify. Unknown profile
+              answers stay unresolved.
+            </p>
+          </details>
+        </div>
+      ))}
+    </div>
+  );
+}
