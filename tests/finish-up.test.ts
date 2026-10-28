@@ -225,7 +225,7 @@ describe('operations', () => {
   });
   it('ships an installable app manifest with real icons', () => {
     const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'));
-    expect(manifest).toMatchObject({ display: 'standalone', start_url: '/' });
+    expect(manifest).toMatchObject({ display: 'standalone', start_url: './', scope: './' });
     for (const icon of manifest.icons) expect(existsSync(join('public', icon.src))).toBe(true);
     expect(manifest.icons.some((i: { purpose?: string }) => i.purpose === 'maskable')).toBe(true);
     const worker = readFileSync('public/sw.js', 'utf8');
