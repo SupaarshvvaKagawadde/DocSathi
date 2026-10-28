@@ -32,7 +32,7 @@ export function PdfPreview({
     setBusy(true);
     setPage(1);
     void (async () => {
-      const response = await fetch(url, { credentials: 'same-origin', signal: controller.signal });
+      const response = await fetch(url, { credentials: 'include', signal: controller.signal });
       if (!response.ok) throw new Error('The original could not be loaded. Refresh and try again.');
       const data = new Uint8Array(await response.arrayBuffer());
       const pdfjs = await import('pdfjs-dist');

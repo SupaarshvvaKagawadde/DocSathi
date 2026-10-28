@@ -56,7 +56,7 @@ export function GuardianConsent({
   return (
     <div className="landing guardian-page">
       <header className="landing-nav">
-        <a className="landing-brand" href="/" aria-label="DocSathi home">
+        <a className="landing-brand" href={import.meta.env.BASE_URL} aria-label="DocSathi home">
           <Wordmark />
         </a>
         <div className="landing-nav-tools">
@@ -121,7 +121,7 @@ export function GuardianConsent({
                   <ShieldCheck size={20} aria-hidden="true" />
                   {done}
                 </p>
-                <a className="outline full" href="/">
+                <a className="outline full" href={import.meta.env.BASE_URL}>
                   Go to DocSathi
                 </a>
               </>

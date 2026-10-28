@@ -1,4 +1,11 @@
 let csrf = '';
+const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+const sameOriginApi = import.meta.env.DEV || import.meta.env.BASE_URL === '/';
+export const apiUrl = (path: string) => {
+  if (!apiBase && !sameOriginApi)
+    throw new Error('The API is not configured for this deployment.');
+  return `${apiBase}/api${path}`;
+};
 export const setCsrf = (value: string) => {
   csrf = value;
 };
@@ -12,9 +19,9 @@ export class ApiError extends Error {
 }
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const multipart = options.body instanceof FormData;
-  const response = await fetch('/api' + path, {
+  const response = await fetch(apiUrl(path), {
     ...options,
-    credentials: 'same-origin',
+    credentials: 'include',
     headers: {
       ...(!multipart ? { 'Content-Type': 'application/json' } : {}),
       ...(csrf ? { 'x-csrf-token': csrf } : {}),
@@ -37,7 +44,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 }
 export const body = (value: unknown) => JSON.stringify(value);
 export async function download(path: string, name: string) {
-  const response = await fetch('/api' + path, { credentials: 'same-origin' });
+  const response = await fetch(apiUrl(path), { credentials: 'include' });
   if (!response.ok) {
     const details = await response.json().catch(() => null);
     throw new Error(
@@ -253,7 +260,7 @@ function sendChunk(
     const xhr = new XMLHttpRequest(),
       abort = () => xhr.abort(),
       cleanup = () => signal.removeEventListener('abort', abort);
-    xhr.open('PUT', `/api/uploads/${id}`);
+    xhr.open('PUT', apiUrl(`/uploads/${id}`));
     xhr.withCredentials = true;
     xhr.timeout = 60000;
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');

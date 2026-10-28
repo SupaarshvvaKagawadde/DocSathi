@@ -9,7 +9,7 @@ import { Dialog } from './components/Dialog';
 import { EvidenceDialog } from './components/EvidenceDialog';
 import { ProfileDialog } from './components/ProfileDialog';
 import { size, date } from './components/Status';
-import { api, body, setCsrf, download, ApiError, uploadOriginal } from './api';
+import { api, apiUrl, body, setCsrf, download, ApiError, uploadOriginal } from './api';
 import { CatalogProvider, uploadRules, type Catalog } from './catalog';
 import { ApplicationWizard, type CreateApplicationInput } from './components/ApplicationWizard';
 import { WorkspaceHome, type PacketCard } from './components/WorkspaceHome';
@@ -1119,12 +1119,13 @@ export default function App() {
                 {preview.status === 'ready' ? (
                   preview.mime === 'image/jpeg' ? (
                     <img
-                      src={`/api/packets/${activeId}/documents/${preview.id}/content`}
+                      src={apiUrl(`/packets/${activeId}/documents/${preview.id}/content`)}
+                      crossOrigin="use-credentials"
                       alt={`Original evidence ${preview.name}`}
                     />
                   ) : (
                     <PdfPreview
-                      url={`/api/packets/${activeId}/documents/${preview.id}/content`}
+                      url={apiUrl(`/packets/${activeId}/documents/${preview.id}/content`)}
                       name={preview.name}
                       page={previewPage}
                       onPageChange={(page) => {
@@ -1204,7 +1205,7 @@ export default function App() {
                 {preview.status === 'ready' && (
                   <a
                     className="primary"
-                    href={`/api/packets/${activeId}/documents/${preview.id}/content`}
+                    href={apiUrl(`/packets/${activeId}/documents/${preview.id}/content`)}
                     download={preview.name}
                   >
                     <Download size={16} aria-hidden="true" />

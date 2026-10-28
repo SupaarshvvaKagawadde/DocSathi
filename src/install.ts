@@ -22,7 +22,9 @@ export function watchInstall() {
   // servers skip it so hot reloading and browser tests always see the network.
   if (import.meta.env.PROD && 'serviceWorker' in navigator)
     window.addEventListener('load', () => {
-      void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+      void navigator.serviceWorker
+        .register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL })
+        .catch(() => {});
     });
 }
 export const installState = () =>

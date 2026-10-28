@@ -11,6 +11,7 @@ import {
 import { Dialog } from './Dialog';
 import { PdfPreview } from './PdfPreview';
 import { size } from './Status';
+import { apiUrl } from '../api';
 import type {
   EvidenceAnchor,
   EvidenceSuggestion,
@@ -74,7 +75,7 @@ export function EvidenceDialog({
             </span>
             {doc && (
               <a
-                href={`/api/packets/${packetId}/documents/${doc.id}/content`}
+                href={apiUrl(`/packets/${packetId}/documents/${doc.id}/content`)}
                 download={doc.name}
                 className="text-link"
               >
@@ -88,13 +89,14 @@ export function EvidenceDialog({
               <div className="paper-preview">
                 {doc.mime === 'image/jpeg' ? (
                   <img
-                    src={`/api/packets/${packetId}/documents/${doc.id}/content`}
+                    src={apiUrl(`/packets/${packetId}/documents/${doc.id}/content`)}
+                    crossOrigin="use-credentials"
                     alt={`Uploaded evidence: ${doc.name}`}
                   />
                 ) : (
                   <>
                     <PdfPreview
-                      url={`/api/packets/${packetId}/documents/${doc.id}/content`}
+                      url={apiUrl(`/packets/${packetId}/documents/${doc.id}/content`)}
                       name={doc.name}
                       page={pageFrom}
                       onPageChange={(page) => {
@@ -397,7 +399,7 @@ export function EvidenceDialog({
                 {linked && (
                   <a
                     className="inline-link"
-                    href={`/api/packets/${packetId}/documents/${linked.id}/content`}
+                    href={apiUrl(`/packets/${packetId}/documents/${linked.id}/content`)}
                     target="_blank"
                     rel="noreferrer"
                   >

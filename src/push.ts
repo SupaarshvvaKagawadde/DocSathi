@@ -5,13 +5,15 @@ export const pushSupported = () =>
   'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
 async function registration() {
-  return navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  return navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
+    scope: import.meta.env.BASE_URL,
+  });
 }
 /** Whether this browser currently delivers reminders for the signed-in account. */
 export async function pushState(): Promise<PushState> {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'blocked';
-  const reg = await navigator.serviceWorker.getRegistration('/');
+  const reg = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
   const sub = await reg?.pushManager.getSubscription();
   return sub ? 'on' : 'off';
 }
@@ -44,7 +46,7 @@ export async function enablePush() {
   });
 }
 export async function disablePush() {
-  const reg = await navigator.serviceWorker.getRegistration('/');
+  const reg = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return;
   await api('/push/subscriptions', { method: 'DELETE', body: body({ endpoint: sub.endpoint }) });

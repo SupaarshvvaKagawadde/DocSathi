@@ -48,7 +48,7 @@ function PasswordOrEmailLink({ action }: { action: AccountAction }) {
   return (
     <div className="landing">
       <header className="landing-nav">
-        <a href="/" aria-label="DocSathi home">
+        <a href={import.meta.env.BASE_URL} aria-label="DocSathi home">
           <Wordmark />
         </a>
       </header>
@@ -66,7 +66,7 @@ function PasswordOrEmailLink({ action }: { action: AccountAction }) {
             {message ? (
               <>
                 <p role="status">{message}</p>
-                <a className="primary full" href="/">
+                <a className="primary full" href={import.meta.env.BASE_URL}>
                   Continue to workspace
                 </a>
               </>
@@ -120,7 +120,7 @@ function PasswordOrEmailLink({ action }: { action: AccountAction }) {
                       ? 'Save new password'
                       : 'Verify email address'}
                 </button>
-                <a className="text-link" href="/">
+                <a className="text-link" href={import.meta.env.BASE_URL}>
                   Return to sign in
                 </a>
               </form>

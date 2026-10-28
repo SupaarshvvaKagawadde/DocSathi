@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { AlertCircle, Check, RotateCcw, RotateCw } from 'lucide-react';
 import { Dialog } from './Dialog';
-import { api } from '../api';
+import { api, apiUrl } from '../api';
 import { size as formatSize } from './Status';
 import type { DocumentRecord, Requirement } from '../../shared/model';
 import {
@@ -210,8 +210,8 @@ export function PhotoFixer({
   // Load the original; the browser applies its camera orientation.
   useEffect(() => {
     let alive = true;
-    fetch(`/api/packets/${packetId}/documents/${original.id}/content`, {
-      credentials: 'same-origin',
+    fetch(apiUrl(`/packets/${packetId}/documents/${original.id}/content`), {
+      credentials: 'include',
     })
       .then((r) => {
         if (!r.ok) throw Error('The original could not be opened.');

@@ -5,7 +5,7 @@ import { PdfPreview } from './PdfPreview';
 import { templateRequirement } from '../../shared/templates';
 import type { PacketDetail, Requirement } from '../../shared/model';
 import type { InstructionCandidate, InstructionDraft } from '../../shared/instruction-draft';
-import { api, body } from '../api';
+import { api, apiUrl, body } from '../api';
 import { useCatalog } from '../catalog';
 
 type Decision = 'include' | 'exclude';
@@ -162,7 +162,7 @@ export function InstructionPdf({
           <aside className="draft-source" aria-label="Source instructions">
             {source && (
               <PdfPreview
-                url={`/api/packets/${data.packet.id}/documents/${source.id}/content`}
+                url={apiUrl(`/packets/${data.packet.id}/documents/${source.id}/content`)}
                 name={source.name}
                 page={focus?.page || 1}
                 onPageChange={(page) =>
